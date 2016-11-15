@@ -1,0 +1,301 @@
+<apex:page controller="AdminUIController450" sidebar="false" action="{!initialize}">
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css"></link>
+    <script src="//code.jquery.com/jquery-1.10.2.js"></script>
+    <script src="//code.jquery.com/ui/1.11.4/jquery-ui.js"></script>
+
+    <style>
+        .saveBtn {
+            margin-top: 10px;
+        }
+
+        .saveBtn button {
+            padding: 5px 10px;
+        }
+
+        h1 {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+
+        option {
+            font-size: 12px !important;
+        }
+
+        option[value*="rc_required"]:after {
+           content: ' *';
+           color: red;
+        }
+
+        table.custom-log {
+            border-collapse: seperate;
+            border-spacing: 22px;
+        }
+
+        td.btn-group {
+            vertical-align: middle;
+            text-align: center;
+        }
+
+        .btn-label {
+            margin:7px 0;
+        }
+
+        .custom-log select {
+            min-width: 83px;
+            min-height: 112px;
+        }
+
+        .ui-dialog .ui-dialog-content {
+            word-spacing: 2px;
+            font-size: 14px;
+            font-family: arial;
+        }
+    </style>
+
+    <apex:sectionHeader title="Cloud Phone Settings"/>
+    <apex:form id="adminForm">
+        <apex:pageBlock title="Auto Save Setting" id="autoLogBlock">
+            <div>
+                Pop matching Salesforce entity record on call &nbsp;
+                <apex:selectList value="{!popOnRinging}" id="popOnRinging" multiselect="false" size="1">
+                    <apex:selectOption itemValue="{true}" itemLabel="ringing" />
+                    <apex:selectOption itemValue="{false}" itemLabel="answered" />
+                </apex:selectList>
+            </div>
+            <br />
+            <div>
+                <span id="autoLogCheckBoxWrapper" ><apex:inputCheckBox value="{!isAutoSave}" id="autoLogCheckbox"/></span> Auto create call log on &nbsp;
+                <span id="saveOnRingingWrapper" >
+                <apex:selectList value="{!saveOnRinging}" id="saveOnRinging" multiselect="false" size="1" disabled="{!isAutoSave!=true || popOnRinging!=true}" >
+                    <apex:selectOption itemValue="{true}" itemLabel="ringing" />
+                    <apex:selectOption itemValue="{false}" itemLabel="answered" />
+                </apex:selectList>
+                </span>
+            </div>
+
+            <div class="saveBtn">
+                <button id="autoLogSaveBtn"> Save </button>
+            </div>
+        </apex:pageBlock>
+
+        <apex:pageBlock title="Log Customization" id="customLogBlock">
+            <apex:outputText style="font-size:12px" value="* The field types supported in call log are Lookup Relationship, Date, Picklist, Text and Text Area.">
+            </apex:outputText>
+            <table class="custom-log">
+                <tr>
+                    <td>
+                        <h1> Available Fields </h1>
+                        <apex:selectList multiselect="true" id="availableList" size="7">
+                            <apex:selectOptions value="{!availableLogFields}" />
+                        </apex:selectList>
+                    </td>
+
+                    <td class="btn-group">
+                        <div class="btn-label"> Add </div>
+                        <span onclick="moveFields('{!$Component.customLogBlock.availableList}', '{!$Component.customLogBlock.selectedList}')" >
+                            <img src="/s.gif" class="rightArrowIcon" alt="Add"/>
+                        </span>
+                        <div class="btn-label"> Remove </div>
+                        <span onclick="moveFields('{!$Component.customLogBlock.selectedList}', '{!$Component.customLogBlock.availableList}')">
+                            <img src="/s.gif" class="leftArrowIcon" alt="Remove"/>
+                        </span>
+                    </td>
+
+                    <td>
+                        <h1> Selected Fields </h1>
+                        <apex:selectList multiselect="true" id="selectedList" size="7">
+                            <apex:selectOptions value="{!selectedLogFields}" />
+                        </apex:selectList>
+                    </td>
+
+                    <td class="btn-group">
+                        <div class="btn-label"> Up </div>
+                        <span onclick="orderFields('{!$Component.customLogBlock.selectedList}', 'up')" >
+                            <img src="/s.gif" class="upArrowIcon" alt="Up"/>
+                        </span>
+                        <div class="btn-label"> Down </div>
+                        <span onclick="orderFields('{!$Component.customLogBlock.selectedList}', 'down')">
+                            <img src="/s.gif" class="downArrowIcon" alt="Down"/>
+                        </span>
+                    </td>
+                </tr>
+            </table>
+
+            <div class="saveBtn">
+                <button id="customLogSaveBtn"> Save </button>
+            </div>
+        </apex:pageBlock>
+    </apex:form>
+
+    <script>
+        $.extend({
+            alert: function (message, title) {
+                $("<div></div>").dialog({
+                    buttons: { "OK": function () { $(this).dialog("close"); } },
+                    close: function (event, ui) { $(this).remove(); },
+                    resizable: false,
+                    title: title,
+                    modal: true
+                }).html(message);
+            }
+        });
+
+        var MESSAGE = {
+            AUTOSAVE: 'Auto Save Call Log Setting',
+            CUSTOMLOG: 'Custom Call Log Setting',
+            POP_SCREEN: 'Pop Screen Setting',
+            SAVE: 'Save',
+            SAVING: 'Saving...',
+            INVALID_OPERATION: 'Invalid operation, required fields have to be selected.',
+            UPDATE_SUCCESSFUL_AUTOSAVE: "Update is successful. <br><br> Please refresh any page containing RingCentral for Salesforce for these settings to take effect.",
+            UPDATE_SUCCESSFUL_CUSTOM_FIELDS: "Update is successful. <br><br> Please refresh any page containing RingCentral for Salesforce for it to take effect. <br><br> All the mandatory fields need to have value for a call log to be successfully saved.",
+            UPDATE_FAILURE: "Update fails. Please try again later."
+        };
+
+        $("#autoLogSaveBtn").click(function(event){
+            var autoLogEl = document.getElementById('{!$Component.adminForm.autoLogBlock.autoLogCheckbox}');
+            var isAutoSave = autoLogEl && autoLogEl.checked ? true : false;
+
+            var saveOnRingingEl = document.getElementById('{!$Component.adminForm.autoLogBlock.saveOnRinging}');
+            var saveOnRinging = saveOnRingingEl && saveOnRingingEl.value === "{true}" ? true : false;
+
+            var popOnRingingEl = document.getElementById('{!$Component.adminForm.autoLogBlock.popOnRinging}');
+            var popOnRinging = popOnRingingEl && popOnRingingEl.value === "{true}" ? true : false;
+
+            var btnElem = $("#autoLogSaveBtn")[0];
+
+            btnElem.innerHTML = MESSAGE.SAVING;
+            btnElem.disabled = true;
+
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.AdminUIController450.saveAutoSaveSettings}',
+                isAutoSave,
+                saveOnRinging,
+                popOnRinging,
+                function(result, event) {
+                    if (event.statusCode === 200) {
+                        btnElem.innerHTML = MESSAGE.SAVE;
+                        $.alert(MESSAGE.UPDATE_SUCCESSFUL_AUTOSAVE, MESSAGE.AUTOSAVE);
+                    } else {
+                        $.alert(MESSAGE.UPDATE_FAILURE, MESSAGE.AUTOSAVE);
+                    }
+                    btnElem.disabled = false;
+                },
+                {escape: false}
+            );
+            event.preventDefault();
+        });
+
+        function updateSaveOnRinging() {
+            var autoLogEl = document.getElementById('{!$Component.adminForm.autoLogBlock.autoLogCheckbox}');
+            var isAutoSave = autoLogEl && autoLogEl.checked ? true : false;
+
+            var saveOnRingingEl = document.getElementById('{!$Component.adminForm.autoLogBlock.saveOnRinging}');
+
+            var popOnRingingEl = document.getElementById('{!$Component.adminForm.autoLogBlock.popOnRinging}');
+            var popOnRinging = popOnRingingEl && popOnRingingEl.value === "{true}" ? true : false;
+
+            saveOnRingingEl.disabled = !isAutoSave || !popOnRinging;
+            if(!popOnRinging) {
+                saveOnRingingEl.value = "{false}";
+            } else if(!isAutoSave) {
+              saveOnRingingEl.value = "{true}";
+            }
+        }
+        $("#autoLogCheckBoxWrapper input").on("change", updateSaveOnRinging);
+        $(document.getElementById("{!$Component.adminForm.autoLogBlock.popOnRinging}")).on("change", updateSaveOnRinging);
+
+
+        $("#customLogSaveBtn").click(function(event){
+            event.preventDefault();
+            var selectedListElem = $(document.getElementById('{!$Component.adminForm.customLogBlock.selectedList}')),
+                buttonElem = $("#customLogSaveBtn")[0];
+
+            var selectedFieldsArr = [];
+            selectedListElem.find("option").each(function(index, option) {
+                if (option.value && option.text) {
+                    var optionVal = option.value.replace(/-rc_non_required|-rc_required$/,'');
+                    selectedFieldsArr.push(optionVal);
+                }
+            });
+
+            buttonElem.innerHTML = MESSAGE.SAVING;
+            buttonElem.disabled = true;
+
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.AdminUIController450.setCustomLogFields}',
+                selectedFieldsArr,
+                function(result, event){
+                    if (event.statusCode === 200) {
+                        buttonElem.innerHTML = MESSAGE.SAVE;
+                        $.alert(MESSAGE.UPDATE_SUCCESSFUL_CUSTOM_FIELDS, MESSAGE.CUSTOMLOG);
+                    } else {
+                        $.alert(MESSAGE.UPDATE_FAILURE, MESSAGE.CUSTOMLOG);
+                    }
+                    buttonElem.disabled = false;
+                },
+                {escape: false}
+            );
+        });
+
+        function moveFields(moveFromElemId, moveToElemId) {
+             var moveFromList = $(document.getElementById(moveFromElemId)),
+                 moveToList = $(document.getElementById(moveToElemId)),
+                 selectedFields = moveFromList.find("option:selected");
+
+             if (selectedFields && selectedFields.length > 0) {
+                 selectedFields.remove();
+                 moveToList.append(selectedFields);
+             }
+        }
+
+        var isIE = /Trident/.test(navigator.userAgent);
+
+        $('option[value*="rc_required"]').each(function (idx, el) {
+            if(isIE || getComputedStyle(el, ':after').color == "") {
+                var $el = $(el);
+                $el.html($el.html() + '&nbsp; *');
+            }
+        });
+
+        function orderFields(selectedListId, direction) {
+             var selectedList = $(document.getElementById(selectedListId)),
+                 selectedFields = selectedList.find("option:selected");
+
+             if (selectedFields && selectedFields.length > 0) {
+                 if (direction === 'up') {
+                     var before = selectedFields.first().prev();
+                     selectedFields.insertBefore(before);
+                 } else if (direction === 'down') {
+                     var after = selectedFields.last().next();
+                     selectedFields.insertAfter(after);
+                 }
+             }
+        }
+
+        $(document).ready(function(){
+            var selectedFieldsArr = [];
+                selectedListElem = $(document.getElementById('{!$Component.adminForm.customLogBlock.selectedList}')),
+                buttonElem = $("#customLogSaveBtn")[0];
+
+            selectedListElem.find("option").each(function(index, option) {
+                if (option.value && option.text) {
+                    var optionVal = option.value.replace(/-rc_non_required|-rc_required$/,'');
+                    selectedFieldsArr.push(optionVal);
+                }
+            });
+
+            buttonElem.disabled = true;
+
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.AdminUIController450.setCustomLogFields}',
+                selectedFieldsArr,
+                function(result, event){
+                    buttonElem.disabled = false;
+                },
+                {escape: false}
+            );
+        });
+    </script>
+</apex:page>

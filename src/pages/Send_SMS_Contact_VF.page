@@ -1,0 +1,71 @@
+<apex:page rendered="true" standardController="Contact" extensions="PhoneNumbersContactController" showHeader="false" standardStylesheets="false" applyHtmlTag="false" 
+  applyBodyTag="false" contentType="text/html">
+<apex:outputText escape="false" value="{!"<!DOCTYPE html>"}"/>
+<html>
+    <head>
+        <meta charset="utf-8"></meta>
+        <base href="{!URLFOR($Resource.Salesforce1,'app/')}"></base>
+        <apex:includeScript value="/support/api/26.0/interaction.js"/>
+        <apex:includeScript value="/support/console/24.0/integration.js"/>
+        <script src="//code.jquery.com/jquery-1.10.2.js"></script>
+        <link rel="stylesheet" type="text/css" href="styles/sf1-numbers-table.css"/>
+    </head>
+    
+    <body>
+        <h1> Choose a number to text to </h1>
+        <table class="rc-phones-table">
+            <apex:repeat value="{!nonEmptyPhoneFieldNameList}" var="phoneFieldName">
+                <tr>
+                    <td>
+                        <span class="rc-phone-field"> {!phoneFieldNameToLabel[phoneFieldName]} </span> 
+                        
+                        <span class="rc-phone-number"> 
+                            {!phoneFieldNameToPhoneNumber[phoneFieldName]} 
+                        </span>
+                    </td>
+                </tr>
+            </apex:repeat>
+        </table>
+        
+        <script> 
+            var getUrlParameter = function getUrlParameter(sParam) {
+                var sPageURL = decodeURIComponent(window.location.search.substring(1)),
+                sURLVariables = sPageURL.split('&'),
+                sParameterName,
+                i;
+                
+                window.console.log('sURLVariables', sURLVariables);
+                for (i = 0; i < sURLVariables.length; i++) {
+                    sParameterName = sURLVariables[i].split('=');
+                    
+                    if (sParameterName[0] === sParam) {
+                        return sParameterName[1] === undefined ? true : sParameterName[1];
+                    }
+                }
+            };
+        
+        
+            $(".rc-phone-number").click(function(event) {
+                window._event = event;
+                event.stopPropagation();
+                
+                var objectId = getUrlParameter('id');
+                if (objectId) {
+                    Visualforce && Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.PhoneNumbersContactController.setSmsNumber}',
+                         event.target.innerText,
+                         objectId,
+                         
+                         function (result, event) {
+                             window.close();
+                         },
+            
+                         {escape: false}
+                    );
+               }
+            });
+        
+        </script>
+    </body>
+</html>
+</apex:page>
